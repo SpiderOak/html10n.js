@@ -130,9 +130,7 @@ window.html10n = (function(window, document, undefined) {
   }
   
   /**
-   * Loader
-   * The loader is responsible for loading
-   * and caching all necessary resources
+   * Load and cache resources
    */
   function Loader(resources) {
     this.resources = resources
@@ -141,7 +139,9 @@ window.html10n = (function(window, document, undefined) {
   }
   
   Loader.prototype.load = function(lang, cb) {
-    if(this.langs[lang]) return cb()
+    if(this.langs[lang]) {
+      return cb && cb();
+    }
 
     if (this.resources.length > 0) {
       var reqs = 0;
@@ -187,8 +187,8 @@ window.html10n = (function(window, document, undefined) {
   
   Loader.prototype.parse = function(lang, currHref, data, cb) {
     if ('object' != typeof data) {
-      cb(new Error('A file couldn\'t be parsed as json.'))
-      return
+      cb(new Error("Attempt to parse '" + lang + "' as JSON failed."));
+      return;
     }
 
     // dat alng ain't here, man!
@@ -770,9 +770,9 @@ window.html10n = (function(window, document, undefined) {
   // replace {{arguments}} with their values or the
   // associated translation string (based on its key)
   function substArguments(str, args) {
-    var reArgs = /\{\{\s*([a-zA-Z_\-\.]+)\s*\}\}/
-      , match
-    
+    var reArgs = /\{\{\s*([a-zA-Z_\-\.]+)\s*\}\}/,
+        match;
+
     while (match = reArgs.exec(str)) {
       if (!match || match.length < 2)
         return str // argument key not found
@@ -897,51 +897,52 @@ window.html10n = (function(window, document, undefined) {
   }
   
   /**
-   * Builds a translation object from a list of langs (loads the necessary translations)
-   * @param langs Array - a list of langs sorted by priority (default langs should go last)
+   * Build translation object from langs list, loading necessary translations.
+   *
+   * We load the indicated language's strings and, for language codes that
+   * include "*-XX" country qualifiers, we load strings for languages of
+   * the unqualified base codes (e.g. adding "es" for "es-ES").
+   *
+   * @param langs Array - langs list sorted by priority - default langs should 
+   *                      go last; first is adopted as html10n.language
    */
   html10n.build = function(langs, cb) {
-    var that = this
-      , build = {}
+    var that = this,
+        candidates = [],
+        build = {};
 
-    asyncForEach(langs, function (lang, i, next) {
-      if(!lang) return next();
-      that.loader.load(lang, next)
-    }, function() {
-      var lang
-      langs.reverse()
-      
-      // loop through the priority array...
-      for (var i=0, n=langs.length; i < n; i++) {
-        lang = langs[i]
-        
-        if(!lang) continue;
-        if(!(lang in that.loader.langs)) {// uh, we don't have this lang availbable..
-          // then check for related langs
-          if(~lang.indexOf('-')) lang = lang.split('-')[0];
-          for(var l in that.loader.langs) {
-            if(lang != l && l.indexOf(lang) === 0) {
-              lang = l
-              break;
-            }
-          }
-          if(lang != l) continue;
+    // Derive a list of credible candidates:
+    langs.forEach(function (lang) {
+      var splat;
+      if (lang && candidates.indexOf(lang) == -1) {
+        // Include the non-empty, new item among the candidates:
+        candidates.push(lang);
+        splat = lang.split('-');
+        if (splat[1] && splat[0] && candidates.indexOf(splat[0]) == -1) {
+          // Include the new, non-empty country-qualifier-stripped item:
+          candidates.push(splat[0]);
         }
-        
-        // ... and apply all strings of the current lang in the list
-        // to our build object
-        for (var string in that.loader.langs[lang]) {
-          build[string] = that.loader.langs[lang][string]
-        }
-        
-        // the last applied lang will be exposed as the
-        // lang the page was translated to
-        that.language = lang
       }
-      cb(null, build)
-    })
-  }
-  
+    });
+
+    // Reverse so strings from higher priority langs supercede lower ones:
+    candidates.reverse();
+
+    candidates.forEach(function (candidate) {
+      that.loader.load(candidate);
+      if (candidate in that.loader.langs) {
+        // We have a language for this candidate - include its' strings:
+        for (var string in that.loader.langs[candidate]) {
+          build[string] = that.loader.langs[lang][string];
+        };
+        // The last applied lang will be exposed as the
+        // lang the page was translated to
+        that.language = candidate;
+      }
+      cb(null, build);
+    });
+  };
+
   /**
    * Returns the language that was last applied to the translations hash
    * thus overriding most of the formerly applied langs
