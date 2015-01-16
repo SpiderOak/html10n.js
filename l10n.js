@@ -723,17 +723,6 @@ window.html10n = (function(window, document, undefined) {
     this.translateNode(translations, element)
   }
   
-  function asyncForEach(list, iterator, cb) {
-    var i = 0
-      , n = list.length
-    iterator(list[i], i, function each(err) {
-      if(err) consoleLog(err)
-      i++
-      if (i < n) return iterator(list[i],i, each);
-      cb()
-    })
-  }
-  
   function getTranslatableChildren(element) {
     if(!document.querySelectorAll) {
       if (!element) return []
